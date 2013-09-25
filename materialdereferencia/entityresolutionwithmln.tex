@@ -1,0 +1,143 @@
+\section{Los datos}
+
+En general representan tres cosas:
+
+\begin{itemize}
+\item Los registros de una base de datos de publicaciones, donde cada publicación tiene tres campos: autor, título y lugar de publicación.
+\item Igualdad de registros. Se entiende que la base de datos tiene registros duplicados.
+\item Igualdad de campos. Diferentes valores para un campo, pueden referirse al mismo objeto. Por ejemplo, dos formas de escribir el nombre del mismo autor.
+\end{itemize}
+
+Estos son los predicados:
+Author(class,author\_string)
+Title(class,title\_string)
+Venue(class,venue\_strig)
+SameBib(class,class)
+SameAuthor(author\_string,author\_string)
+SameTitle(title\_string,title\_string)
+SameVenue(venue\_string,venue\_string)
+HasWordAuthor(author\_string, word)
+HasWordTitle(title\_string,word)
+HasWordVenue(venue\_string,word)
+
+El tipo class sirve como clave para agrupar los campos de un mismo registro. Los campos author\_string, title\_string y venue\_string, son cadenas de texto que representan las posibles constantes asociadas al nombre del autor, el título y el lugar de la publicación respectivamente.
+
+Los predicados Author/2, Title/2 y Venue/2 son predicados binarios para los campos de los registros, donde uno de los argumentos es la clave única del registro al que pertenece y el otro el valor del campo.
+
+El predicado SameBib establece los registros que están duplicados. En la base de evidencias también aparece el negado (!SameBib), para indicar los registros que efectivamente son diferentes.
+
+Los predicados SameAuthor, SameTitle y SameVenue indican las constantes que son iguales. También están los negados, para establecer cuáles son diferentes.
+
+Todos los predicados Same\_  incluyen ambos simétricos en la base de evidencias.
+
+Los predicados HasWordAuthor/2, HasWordTitle/2 y HasWordVenue/2, representan la inclusión de determinadas palabras en las cadenas de texto que representan constantes de autor, título o lugar de publicación. Para los autores vemos que se reflejan en la base de evidencias todas las palabras que efectivamente componen la cadena. Para los títulos y los lugares de publicación no se reflejan todas las palabras sino unas cuantas seleccionadas. Además se usa una constante ``Word\_test'' que aparece en todas las cadenas. La forma de seleccionar las palabras que aparecen en la evidencia aún no la tengo clara. 
+
+\section{El problema}
+
+Los problemas son:
+
+\begin{itemize}
+\item Obtener los pesos de la MLN.
+\item Inferencia de la probabilidad de predicados grounded.
+\end{itemize}
+
+Para comprender mejor el problema, vamos la línea de comando de Alchemy para aprender los pesos:
+
+\begin{verbatim}
+learnwts -i er-bnct.mln -t coraSepFixedhwng.1.db,coraSepFixedhwng.2.db,coraSepFixedhwng.3.db,coraSepFixedhwng.4.db -multipleDatabases -o coraSepFixedhwng-learned-can.5.mln -queryEvidence -ne SameBib,SameAuthor,SameTitle,SameVenue -noAddUnitClauses
+\end{verbatim}
+
+De esta línea vemos que:
+
+\begin{itemize}
+
+\item {\bf Opción -i}. Utilizaremos una red lógica de Markov definida en er-bnct.mln.
+\item {\bf Opción -t}. Usamos una lista de ficheros de entrenamiento .db. Estos ficheros contiene átomos ground que se consideran verdaderos o falsos.
+\item {\bf Opción -ne}. Indica los predicados que se consideran ``no evidencias''. En este caso se consideran no evidencias: SameBib, SameAuthor, SameTitle, SameVenue.
+\item {\bf Opción -multipleDatabases}. En este caso se consideran los diferentes ficheros de entrenamiento bases de datos diferentes. Por lo tanto, las constantes en las diferentes bases de datos no se mezclan.
+\item {\bf Opción -queryEvidence}. Se considerará entonces que todos los predicados grounded de los predicados incluidos en la consulta que no estén en la base de evidencias son falsos.
+\item {\bf Opción -noAddUnitClauses}. No se incluirán cláusulas unitarias en el fichero mln. Por defecto, se añaden cláusulas unitarias (un sólo literal) al MLN generado. Estas cláusulas unitarias se derivan de los ficheros de entrenamiento. Con esta opción, estas cláusulas unitarias no se añaden.
+
+\end{itemize}
+
+Como no se han especificado las opciones ``-g'' o ``-d'' se entiede que se va a utilizar el modo de aprendizaje discriminativo.
+
+\section{La red lógica de Markov}
+
+// 
+// --- predicates 
+// 
+Author(bib,author)
+Title(bib,title)
+Venue(bib,venue)
+SameBib(bib,bib)
+SameAuthor(author,author)
+SameTitle(title,title)
+SameVenue(venue,venue)
+
+HasWordAuthor(author, word)
+HasWordTitle(title, word)
+HasWordVenue(venue, word)
+
+//############################################################################ 
+//### single Predicate rules  
+//############################################################################ 
+ 
+!SameBib(b1,b2)
+!SameAuthor(a1,a2)
+!SameTitle(t1,t2)
+!SameVenue(v1,v2)
+
+//############################################################################ 
+//### transitive closure rules  
+//############################################################################ 
+ 
+SameBib(b1,b2) ^ SameBib(b2,b3) => SameBib(b1,b3)
+SameAuthor(a1,a2) ^ SameAuthor(a2,a3) => SameAuthor(a1,a3)
+SameTitle(t1,t2) ^ SameTitle(t2,t3) => SameTitle(t1,t3)
+SameVenue(v1,v2) ^ SameVenue(v2,v3) => SameVenue(v1,v3)
+
+//############################################################################ 
+//### rules connecting attribute match predicates to class match predicates   
+//############################################################################ 
+ 
+Author(bc1,a1) ^ Author(bc2,a2) ^ SameAuthor(a1,a2) => SameBib(bc1,bc2) 
+Title(bc1,t1) ^ Title(bc2,t2) ^ SameTitle(t1,t2) => SameBib(bc1,bc2) 
+Venue(bc1,v1) ^ Venue(bc2,v2) ^ SameVenue(v1,v2) => SameBib(bc1,bc2) 
+
+Author(bc1,a1) ^ Author(bc2,a2) ^ SameBib(bc1,bc2) => SameAuthor(a1,a2) 
+Title(bc1,t1) ^ Title(bc2,t2) ^ SameBib(bc1,bc2) => SameTitle(t1,t2) 
+Venue(bc1,v1) ^ Venue(bc2,v2) ^ SameBib(bc1,bc2) => SameVenue(v1,v2) 
+
+
+//############################################################################ 
+//### rules connecting evidence predicates to attr match predicates 
+//############################################################################ 
+HasWordAuthor(a1, +w) ^ HasWordAuthor(a2, +w) => SameAuthor(a1, a2)
+!HasWordAuthor(a1, +w) ^ HasWordAuthor(a2, +w) => SameAuthor(a1, a2)
+HasWordAuthor(a1, +w) ^ !HasWordAuthor(a2, +w) => SameAuthor(a1, a2)
+
+HasWordTitle(a1, +w) ^ HasWordTitle(a2, +w) => SameTitle(a1, a2)
+!HasWordTitle(a1, +w) ^ HasWordTitle(a2, +w) => SameTitle(a1, a2)
+HasWordTitle(a1, +w) ^ !HasWordTitle(a2, +w) => SameTitle(a1, a2)
+
+HasWordVenue(a1, +w) ^ HasWordVenue(a2, +w) => SameVenue(a1, a2)
+!HasWordVenue(a1, +w) ^ HasWordVenue(a2, +w) => SameVenue(a1, a2)
+HasWordVenue(a1, +w) ^ !HasWordVenue(a2, +w) => SameVenue(a1, a2)
+
+
+//############################################################################ 
+//### rules connecting the class predicates directly to evidence predicates 
+//############################################################################ 
+Author(bc1, a1) ^ Author(bc2, a2) ^ HasWordAuthor(a1, +w) ^ HasWordAuthor(a2, +w) => SameBib(bc1, bc2)
+Author(bc1, a1) ^ Author(bc2, a2) ^ !HasWordAuthor(a1, +w) ^ HasWordAuthor(a2, +w) => SameBib(bc1, bc2)
+Author(bc1, a1) ^ Author(bc2, a2) ^ HasWordAuthor(a1, +w) ^ !HasWordAuthor(a2, +w) => SameBib(bc1, bc2)
+
+Title(bc1, t1) ^ Title(bc2, t2) ^ HasWordTitle(t1, +w) ^ HasWordTitle(t2, +w) => SameBib(bc1, bc2)
+Title(bc1, t1) ^ Title(bc2, t2) ^ !HasWordTitle(t1, +w) ^ HasWordTitle(t2, +w) => SameBib(bc1, bc2)
+Title(bc1, t1) ^ Title(bc2, t2) ^ HasWordTitle(t1, +w) ^ !HasWordTitle(t2, +w) => SameBib(bc1, bc2)
+
+Venue(bc1, v1) ^ Venue(bc2, v2) ^ HasWordVenue(v1, +w) ^ HasWordVenue(v2, +w) => SameBib(bc1, bc2)
+Venue(bc1, v1) ^ Venue(bc2, v2) ^ !HasWordVenue(v1, +w) ^ HasWordVenue(v2, +w) => SameBib(bc1, bc2)
+Venue(bc1, v1) ^ Venue(bc2, v2) ^ HasWordVenue(v1, +w) ^ !HasWordVenue(v2, +w) => SameBib(bc1, bc2)
+

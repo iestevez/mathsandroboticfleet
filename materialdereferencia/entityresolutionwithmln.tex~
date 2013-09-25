@@ -1,0 +1,20 @@
+Respecto a los datos:
+
+En general representan tres cosas:
+
+\begin{itemize}
+\item Los registros de una base de datos de publicaciones, donde cada publicación tiene tres campos: autor, título y lugar de publicación.
+\item Igualdad de registros. Se entiende que la base de datos tiene registros duplicados.
+\item Igualdad de campos. Diferentes valores para un campo, pueden referirse al mismo objeto. Por ejemplo, dos formas de escribir el nombre del mismo autor.
+\end{itemize}
+
+Estos son los predicados:
+Author(class,author\_string)
+Title(class,title\_string)
+Venue(class,venue\_strig)
+SameBib(class,class)
+SameAuthor(author\_string,author\_string)
+SameTitle(title\_string,title\_string)
+SameVenue(venue\_string,venue\_string)ç
+
+El tipo class sirve como clave para agrupar los campos de un mismo registro.
