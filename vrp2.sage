@@ -1,10 +1,13 @@
 # Vehicle Routing Problem
-# Implementation of the ILP with the multicommodity flow formulation
+# Implementation of the classic VRP  with the multicommodity flow formulation
+
+import sage.all
 
 N=14
 M=4
 clients=[1..N]
 places=[0..N]
+vehicle = [0..(M-1)]
 q = [1,1,3,1,9,2,6,2,1,3,2,2,1,5] # Demand
 Q=15 # Vehicles capacity
 
@@ -22,13 +25,28 @@ c=[[1 for k1 in places] for k1 in places]
 
 # Objective Function
 
-sum=0
+# Locals costs
+
+sumL=0
 for i in places:
    for j in places:
       if i!=j:
-         sum=sum + c[i][j] * psi[(i,j)]
+         sumL=sumL + c[i][j] * psi[(i,j)]
 
-p.set_objective(sum)
+# Individual route contribution to the cost
+
+sumR = 0
+for i in vehicles:
+   sumR = sumR + routeCost(i,c,psi)
+
+# Global contribution to the cost
+
+sumG = 0
+sumG = globalCost(c,psi)
+
+# Objective is weighted sum of considered costs.
+
+p.set_objective(alpha_local*sumL+alpha_route*sumR+alpha_global*sumG)
 
 for j in clients:
     sum=0
