@@ -2,7 +2,7 @@
 # Implementation of the ILP with the multicommodity flow formulation
 
 N=14
-M=4
+M=6
 clients=[1..N]
 places=[0..N]
 q = [1,1,3,1,9,2,6,2,1,3,2,2,1,5] # Demand
