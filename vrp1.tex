@@ -1,0 +1,273 @@
+\documentclass{article}
+\usepackage{sagetex}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\begin{document}
+
+% Vehicle Routing Problem
+% Implementation of the ILP with the multicommodity flow formulation
+
+
+\section{Definición del problema}
+
+El problema que vamos a resolver es un ``Capacitated Vehicle Routing Problem'' o \textbf{CVRP}. Aquí tenemos un grafo no dirigido $G=(V',E)$ donde hay $N+1$ vértices: $V'=\{0,1,\dots, N\}$. El vértice $0$ representa el alamacén central o ``depot'', y el conjunto de vértices $V=V' \setminus \{ 0 \}$ se corresponde con los $N$ clientes. Cada arco $e_{ij}=\{i, h\} \in E$ representa el coste del transporte entre la posición/depot $i$ y la posición/depot $j$. A al arco $e_{ij}$ se le asocia un coste $c_{ij}$ no negativo. En cada cliente hay que recoger $q_i$ unidades. La capacidad de cada uno de los $M$ vehículos es la misma: $Q$. Se define una ruta como un ciclo simple en el grafo $G$ que pasa por el depot, tal que la demanda de los vértices visitados no sobrepasa la capacidad total del vehículo $Q$. El objetivo es encontrar rutas con el menor coste posible. En esta variante del problema buscaremos una ruta por vehículo. 
+
+\section{Multicommodity flow formulation}
+
+En esta formulación \cite{Garvin1957}, \cite{Garvin1979}, \cite{Garvin1982}, $\psi_{ij}$ son variables binarias que valen $1$ sí y sólo si el arco $e_{ij}$ está en la solución óptima. Aquí $y^l_{ij}$ son variables de flujo que especifican la cantidad de unidades del cliente $l$ transportadas en la solución dada por el arco $e_{ij}$.
+
+
+
+El planteamiento del problema en SAGE comenzaría del siguiente modo:
+
+\begin{sageblock}
+N=14
+M=6
+clients=[1..N]
+places=[0..N]
+q = [1,1,3,1,9,2,6,2,1,3,2,2,1,5] # Demand
+Q=15 # Vehicles capacity
+\end{sageblock}
+
+Es decir, tenemos $N$=\sage{N} clientes para una flota de $M$=\sage{M} vehículos. Los clientes forman el conjunto $clients= \sage{clients}$. El conjunto $places$ añade el lugar $0$ que representa el depósito central de vehículos. Las demanda de los diferentes clientes están en el conjunto $q$. Por ejemplo, el cliente \sage{clients[1]} tiene una demanda de \sage{q[1]}, mientras el cliente \sage{clients[5]} tiene una demanda de \sage{q[5]}. La capacidad de cada vehículo viene dada por $Q$, es decir, para este caso \sage{Q}.
+
+Ahora tenemos que definir el coste de las diferentes conexiones entre los lugares.
+
+\begin{sageblock}
+# Costs of paths
+c=[[1 for k1 in places] for k1 in places]
+\end{sageblock}
+
+Esto define una matriz cuadrada de tamaño $\sage{len(places)} \times \sage{len(places)}$. Así, el coste para ir del lugar $i$ al $j$, vendría dado por $c_{ij}$.
+
+El objetivo del problema en este caso es encontrar $M$=\sage{M} rutas que empiecen y terminen en el lugar $0$ de modo que sean disjuntas y se atiendan a todos los clientes. Vamos a hacer un planteamiento de programación lineal entera.
+
+Comenzaremos creando un objeto SAGE de clase MILP (Mixed Integer Linear Program), parametrizado para realizar una minimización de cierta función de coste y utilizando el algoritmo ``GLPK''.
+
+\begin{sageblock}
+p=MixedIntegerLinearProgram(maximization=False,solver="GLPK")
+\end{sageblock}
+
+Para ello crearemos variables de dos valores $\psi_{ij}$ y variables enteras $y_i$:
+
+\begin{sageblock}
+# Two-index variables
+psi=p.new_variable()
+p.set_binary(psi)
+
+# Flow variables
+y=p.new_variable(integer=True)
+\end{sageblock}
+
+Las variables $\psi_{ij}$ establecen los caminos entre lugares que son recorridos por un vehículo. Si la variable $\psi_{ij}$ es $1$ significa que el camino entre $i$ y $j$ es recorrido. Si por el contrario es $0$ el camino no es recorrido. El valor de las variables $\psi_{ij}$ es precisamente la solución que buscamos, ya que tal como está planteado el problema todos los vehículos son equivalente y basta asignar a cada uno de ellos un circuito a recorrer. Para encontrar un circuito bastará con comenzar en el lugar $0$ y luego continuar en un lugar $i$ tal que $\psi_{0i}=1$.
+
+Así pues, la función objetivo puede definirse como el coste total del transporte asociado a recorrer todos los circuitos:
+
+$$S=\sum_{(i,j) \in V' \times V', i \neq j} c_{ij}\psi_{ij}$$
+
+En Sage la creamos del siguiente modo:
+
+\begin{sageblock}
+# Objective Function
+sum=0
+for i in places:
+   for j in places:
+      if i!=j:
+         sum=sum + c[i][j] * psi[(i,j)]
+p.set_objective(sum)
+\end{sageblock}
+
+Observamos como psi es en realidad una lista de variables indexada por dos índices y sum es una función lineal de estas variables.
+
+Ahora pasamos a la definición de las restricciones. Primero vamos a establecer las siguiente ecuaciones (una para cada lugar $\forall j \in V$):
+
+$$\sum_i \psi_{ij} = 1$$
+
+Esto quiere decir que a cada lugar diferente del depósito central sólo se puede acceder desde uno y sólo un lugar. En SAGE lo definimos:
+
+\begin{sageblock}
+for j in clients:
+    sum=0
+    for i in places:
+        if i!=j:
+            sum = sum + psi[(i,j)]
+    p.add_constraint(sum,max=1,min=1)
+\end{sageblock}
+
+Igualmente vamos a definir una restricción que evita que desde un lugar diferente al depósito central se acceda exactamente a un sólo lugar. Esto se puede imponer con la restricción (una para cada lugar $\forall i \in V$):
+
+$$\sum_j \psi_{ij} = 1$$
+
+En SAGE sería:
+
+\begin{sageblock}
+for i in clients:
+    sum=0
+    for j in places:
+        if i!=j:
+            sum= sum + psi[(i,j)]
+    p.add_constraint(sum, max=1,min=1)
+\end{sageblock}
+
+Ahora vamos a ocuparnos de asegurarnos de tener exactamente $M$ circuitos, uno por cada vehículo. Para ello basta hacer que el número de conexiones que parta del depósito central sea $M$.
+
+$$\sum_i \psi_{0i}=M$$
+
+En SAGE:
+
+\begin{sageblock}
+sum=0
+for j in clients:
+    sum+=psi[(0,j)]
+p.add_constraint(sum,max=M,min=M)
+\end{sageblock}
+
+Del mismo modo, el número de caminos entrantes al depósito central debe ser igual al número de vehículos, ya que cada vehículo tendrá que partir y llegar una sola vez a este depósito. La ecuación que determina esto es:
+
+$$\sum_i \psi_{i0}=M$$
+
+En SAGE:
+
+\begin{sageblock}
+sum=0
+for j in clients:
+    sum+=psi[(j,0)]
+p.add_constraint(sum,max=M,min=M)
+\end{sageblock}
+
+
+Vamos a comenzar ahora con las restricciones de ``flujo''. El flujo neto de un lugar $f^l_{j}$ se definen para un cliente $l$ que tiene cierta demanda $q_l$ en relación a un lugar $j$. Si el lugar $j$ se corresponde con el del cliente tenemos un flujo de salida neto que viene dado por la demanda del cliente. Si estamos en el depósito central el flujo neto que aporta el cliente l a ese depósito es $-q_l$, ya que consideramos positivos los flujos salientes y negativos los entrantes. Por otra parte, el flujo entre el lugar $i$ y el $j$ debido al cliente $l$ se designa por $y^l_{ij}$. Estos flujos serán variables en nuestro problema de programación lineal entera, junto con los $\psi_{ij}$. Debe cumplir la siguiente ecuación de conservación para cada cliente $l$ y para cada lugar $j$.
+
+
+$$\sum_{i \in V'} y^l_{ij}-\sum_{i \in V'} y^l_{ji} = f_{lj}$$
+
+Esta ecuación significa que el flujo total de salida desde el lugar $j$, menos el flujo total de entrada debido al cliente $l$ debe ser el flujo neto: la demanda del cliente si estamos en el lugar del cliente, menos la demanda del cliente si estamos considerando el depot y $0$ en el resto de los casos.
+
+Expresado en SAGE sería:
+
+\begin{sageblock}
+
+#Netflow in each client for each connector
+
+for l in clients:
+    for j in places:
+        if j==0:
+            netflow = -q[l-1]
+        elif j==l:
+            netflow = q[l-1]
+        else:
+            netflow = 0
+        sum=0
+        for i in places:
+           if i!=j:
+            sum+=y[(l,(i,j))]-y[(l,(j,i))]
+        p.add_constraint(sum,max=netflow,min=netflow)
+
+\end{sageblock}
+
+Estos flujos deben estar limitados por la demanda. Es decir, para cada par de lugares $i$, $j$ y cliente $l$ debe cumplirse:
+
+$$y^l_{ij} \leq q_l \psi_{ij}$$
+
+Es decir, si dos lugares no están conectados el flujo debe ser menor o igual a 0 para cualquier cliente. En cambio si están conectados, el flujo debido al cliente $l$ debe ser a lo sumo la demanda de este cliente. 
+
+En SAGE quedaría:
+
+\begin{sageblock}
+# Flows are smaller than demands
+for i in places:
+   for j in places:
+      for l in clients:
+         if i!=j:
+            p.add_constraint(y[(l,(i,j))]<= q[l-1] * psi[(i,j)])
+
+\end{sageblock}
+
+Finalmente, el flujo total que parte del lugar i  formado por las demandas de todos los clientes no puede superar la capcidad del vehículo Q menos la demanda del propio lugar $i$. Esto quiere decir que cuando un vehículo llega a un lugar después de haber recorrido otros lugares debe tener aún capacidad suficiente para atender la demanda del cliente.  La ecuación sería:
+
+$$\sum_{(j,l) \in C \times C} y_{lij} \leq Q-q_i$$
+
+Expresado en SAGE quedaría:
+
+\begin{sageblock}
+
+# Capacity of vehicles is larger than total attended demand
+
+for i in clients:
+   sum=0
+   for j in clients:
+      for l in clients:
+         if i!=j:
+            sum+=y[(l,(i,j))]
+   p.add_constraint(sum<=Q-q[i-1])
+
+\end{sageblock}
+
+
+Finalmente vamos a exigir que todos los flujos sean positivos o 0:
+
+$$\forall l \in C, i \in P, j \in P y_{lij} \geq 0$$
+
+Expresado en SAGE:
+
+\begin{sageblock}
+# Flows are positive
+
+for i in places:
+   for j in places:
+      if i!=j:
+         for l in clients:
+            p.add_constraint(y[(l,(i,j))],min=0)
+
+\end{sageblock}
+
+El problema así planteado tiene las siguientes características:
+
+\begin{itemize}
+
+\item Número de vehículos: $\sage{M}$
+\item Capacidad de los vehículos: $\sage{Q}$
+\item Número de clientes: $\sage{N}$
+\item Demanda de los clientes: $\sage{q}$
+\item Número de restricciones: $\sage{p.number_of_constraints()}$.
+\item Número de variables: $\sage{p.number_of_variables()}$.
+
+\end{itemize}
+
+Pasemos a resolverlo:
+
+\begin{sageblock}
+obj=p.solve()
+\end{sageblock}
+
+La solución obtenida tiene un coste de \sage{obj}.
+
+
+\begin{sagesilent}
+def psitodir(psival,N):
+ keys=[key for key in psival.keys() if psival[key]==1]
+ connect=[]
+ for i in range(0,N+1):
+   l=[dest for (ori,dest) in keys if ori==i]
+   connect.append((i,l))
+ g={}
+ g.update(connect)
+ return(g)
+\end{sagesilent}
+  
+
+\begin{sagesilent}
+# Construimos el grafo
+psival=p.get_values(psi)
+g=psitodir(psival,N)
+G=DiGraph(g)
+p=G.plot()
+p.save(filename="vrp1.eps")
+\end{sagesilent}
+
+El mapa de conexiones es:
+
+\includegraphics[scale=1.0]{vrp1}
+
+\end{document}
+
