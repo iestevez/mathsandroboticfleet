@@ -136,34 +136,56 @@ Autonomous Vehicle, Robotic Fleet, Distributed Algorithms
 %% main text
 \section{Introducción}
 
-Nos planteamos un escenario sin red de comunicaciones global para los robots de la flota, ni elemento central de cómputo capaz de resolver el problema global. Por el contrario cada robot tendrá los recursos de cómputo necesarios para resolver el problema de optimización dial-a-ring con un depot. Veamos en más detalle las reglas de este problema:
+Nos planteamos un escenario sin red de comunicaciones global para los robots de la flota, ni elemento central de cómputo capaz de resolver el problema global. Por el contrario, cada robot tendrá los recursos de cómputo necesarios para resolver el problema de optimización dial-a-ring con un depot. Veamos en más detalle las reglas de este problema:
 
 \begin{itemize}
 
-\item Los usarios están en localizaciones conectadas por rutas. Una petición de servicio es activada por el usuario mediante un elemento de comunicación, que reenvía constantemente la solicitud hasta que un robot asume la petición. Para ello el robot y el elemento de comunicación del usuario deben intersectar sus zonas de cobertura. El robot lo incorpora a la lista de peticiones pendientes local y el elemento de comunicación deja de transmitir.
+\item Los usarios están en localizaciones conectadas por rutas. Una \textbf{petición de servicio} es activada por el usuario mediante un elemento de comunicación, que reenvía constantemente la solicitud hasta que un robot asume la petición. Para ello, el robot y el elemento de comunicación del usuario deben \textbf{intersectar sus zonas de cobertura}. El robot lo incorpora a la \textbf{lista de peticiones pendientes local} y el elemento de comunicación deja de transmitir.
 
-\item Cuando un robot intersecta su cobertura con otro intercambian información sobre lista de peticiones pendientes y peticiones atendidas.
+\item Cuando un robot intersecta su cobertura con otro, dan comienzo a un proceso de \textbf{fusión de listas} (ver más abajo), afectando a la \textbf{lista de peticiones pendientes} y \textbf{lista de peticiones atendidas}.
 
 \item Las peticiones pendientes y peticiones atendidas se mantienen en buffers de tamaño finito. Cuando una nueva información es adquirida por el robot, la información más antigua en los buffers es descartada.
 
-\item{Cuando un robot termina de atender una petición en curso llegando al punto de destino,  comprobará la lista de peticiones pendientes local. Si no tiene ninguna entra en modo de ``espera''. En caso de tener peticiones actuará del siguiente modo:
+\item{Cuando un robot en \textbf{modo servicio} termina de atender una petición en curso llegando al \textbf{punto de destino} pasa a modo \textbf{coordinador-master}. En este modo cada cierto tiempo el robot tratará de realizar un \textbf{proceso de coordinación}.}
+
+\item{Un proceso de coordinación consiste en:
 \begin{itemize}
-\item{Pasará a modo de coordinación-máster. Es decir, tratará de comunicarse con el resto de robots en su área de cobertura para intercambiar información sobre la lista de peticiones pendientes y atendidas. Cada uno de ellos podrá estar en la misma localización que el robot o en otra. Cada robot que forme parte de esta red ad-hoc podrá estar en el instante inicial en uno de los siguientes modos:
-\begin{itemize}
-\item Espera. 
-\item Coordinación-máster.
-\item Coordinación-esclavo. 
-\item Planificación. El robot utiliza sus recursos computacionales y la información adquirida para asignar rutas a un conjunto de robots (incluídos posiblemente el mismo). Tras obtener las rutas las comunica a los robots involucrados. 
-\item Atención. El robot está atendiendo una petición. Una vez está en este modo y tiene la petición asignada se mantendrá en este modo mientras no sea informado que la petición que está atendiendo ya fue atendida. En este modo el robot se mueve hacia un destino por una ruta establecida. Si la petición en curso ya fue atendida el robot continuará la ruta hasta la siguiente localización (submodo ``atención cancelada''). 
+\item{Búsqueda de robots en \textbf{modo espera}. Cada vez que encuentra uno lo sitúa en \textbf{modo coordinador-esclavo}. }
+\item{Finalizado el proceso de búsqueda, se procede a fusionar listas de peticiones pendientes y listas de peticiones atendidas entre los robots participantes en el modo coordinador iniciado.}
+\item{El robot coordinador-máster resuelve un problema de asignación de rutas a partir de la lista de peticiones pendientes resultante de la fusión de listas.}
+\item{Los robots con ruta asignada pasan a \textbf{modo servicio} y van a atender la ruta.}
+\item{Los robots sin ruta asignada pasan a \textbf{modo espera}.}
+\end{itemize}
+}
+
+\item{La fusión de listas consiste en:
+
+\item Realizar la unión de listas de peticiones atendidas, esta será la nueva lista de peticiones atendidas en todos los robots.
+\item Realizar la unión de listas de peticiones pendientes. Eliminar de esta lista todas aquellas peticiones que estén en la nueva lista de peticiones atendidas.
+
+} 
+
 \end{itemize}
 
-La llegada del nuevo robot supondrá un cambio de modo a ``coordinación-esclavo'' para todos los robots que no estén en el modo ``atención''.  El nuevo robot pasaría a ``coordinación-máster''.  Se iniciaría un proceso de ``fusión'' de información que actualiza las peticiones pendientes y las atendidas de todos los robots (incluídos los que están en ``atención''). Tras el proceso de fusión de información el coordinador-máster entra en modo planificación. Tras el cálculo de rutas y enviará las mismas, junto a las peticiones ahora atendidas  a los robots en modo coordinador-esclavo (para los que están en atención sólo es relevante la nueva previsión de peticiones atendidas) que al recibir la ruta correspondiente pasarán al modo ``atención''. 
+\section{Formalización}
 
-}
-El modo de coordinación implica intercambio de información entre los robots para que todos tengan la misma información en relación con las peticiones en curso o atendidas. 
+En cualquier instante tenemos:
 
-\item{Si al menos un robot estuviera en algún modo de coordinación o planificación, se volvería a comenzar el proceso de coodinación. Habrá un nuevo máster que será el robot recién llegado.}
-\item{Si hubiera robots a la espera, se iniciaría 
+\begin{itemize}
+
+\item Un conjunto de vehículos autónomos: $V=\{v_1,v_2,\dots,v_{N_V}\}$ 
+\item Un conjunto de localizaciones: $P=\{p_1, p_2, \dots, p_{N_p}\}$
+\item Un conjunto de rutas: $R=\{r_1, r_2, \dots, r_{N_r}$ donde $r_i:P \rightarrow \left(P \cup \{ \bot \}\right)$.
+\item El conjunto de pares de lugares conectados $CP=\{(p_i,p_j) | p_i, p_j \in P  \wedge \exists r_k \in R : r_k(p_i)=p_j \}$
+\item La función de coste: $F_C:P \times P \times R \rightarrow \Re^{+}$. La función de coste cumple que $\forall p_i,p_j \in P, r_k \in R:  r_k(p_i) \neq p_j$ entonces $F_C(p_i,p_j,r_k)=\infty$.
+\item Dados dos lugares, la función ruta óptima se define $r_{opt}:CP \rightarrow 2^R$ como $r_k \in r_{opt}(p_i,p_j)$ si $r_k(p_i)=p_j$ y $ \forall r_l \neq r_k: r_l(p_i)=p_j, F_C(p_i,p_j,r_k) \leq F_C(p_i,p_j,r_l)$.
+\item La función de coste es monótona si  $\forall p_i, p_j, p_k \in P, r_p, r_q, r_r \in R$, si $r_p \in r_{opt}(p_i,p_j)  \wedge r_q \in r_{opt}(p_i,p_k) \wedge r_r \in r_{opt}(p_k,p_j)$ se cumple que $F_C(p_i,pj,r_p) \geq F_C(p_i,p_k,r_q)+F_C(p_k,p_j,r_r)$
+
+\end{itemize}
+
+
+
+\section{Análisis}
 
 \bibliographystyle{elsarticle-num-names}
 \bibliography{sample.bib}
